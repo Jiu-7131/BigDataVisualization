@@ -1,0 +1,61 @@
+============================================================
+  股票市场行业轮动与因子收益分析 — 项目说明
+  大数据可视化课程期末项目
+============================================================
+
+【运行环境】
+  Python 3.11+
+  操作系统: Windows / macOS / Linux 均可
+
+【依赖库】
+  安装命令: pip install -r requirements.txt
+
+  主要依赖:
+    pandas >= 1.5
+    numpy >= 1.24
+    plotly >= 5.15
+    kaleido >= 0.2        (用于PNG静态图导出)
+    networkx >= 3.0       (图5网络图)
+    matplotlib >= 3.7
+    seaborn >= 0.12
+    tqdm >= 4.65
+    python-docx >= 0.8    (仅用于读取作业说明文档)
+
+【数据获取 (Tushare Pro)】
+  1. 注册 Tushare Pro 账号: https://tushare.pro
+  2. 获取 API token, 设置环境变量或在代码中配置
+  3. 运行: python 全部数据预处理.py
+     该脚本会下载 2022-2025 年全部A股日线、日基本面、指数成分等数据
+
+【数据处理流程 (按顺序执行)】
+  步骤1: python build_industry_data.py      → 行业聚合层 (processed/01_industry/)
+  步骤2: python build_macro_cycle.py        → 宏观环境层 (processed/02_macro/)
+  步骤3: python build_factor_attribution.py → 因子归因层 (processed/03_factor/)
+  步骤4: python build_decision_support.py   → 决策支持层 (processed/04_decision/)
+
+  每个步骤输出 CSV 文件到 processed/ 对应子目录。
+  若已存在预处理数据，可直接运行可视化脚本。
+
+【可视化生成】
+  python visualizations.py   → 生成12张交互式HTML + 静态PNG到 visualizations/
+  python build_dashboard.py  → 生成综合仪表盘 visualizations/index.html
+
+【查看成果】
+  直接用浏览器打开 visualizations/index.html (综合仪表盘, 推荐)
+  或单独打开 visualizations/ 下任意 HTML 文件
+
+【输出目录结构】
+  processed/              预处理数据 (13个CSV)
+    ├── 01_industry/       行业结构层 (5个)
+    ├── 02_macro/          宏观环境层 (2个)
+    ├── 03_factor/         因子归因层 (3个)
+    └── 04_decision/       决策支持层 (3个)
+  visualizations/         可视化成果 (12 HTML + 12 PNG + index.html)
+
+【AI工具声明】
+  本项目使用了 Claude Code (Anthropic) 辅助以下工作:
+  - 数据处理脚本框架搭建与调试
+  - Plotly 可视化代码生成与暗色主题适配
+  - 项目报告文字草稿
+  - 仪表盘 HTML/CSS 布局设计
+  所有代码均经人工审查与验证，确保逻辑正确可运行。
