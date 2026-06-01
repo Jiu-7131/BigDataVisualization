@@ -1,5 +1,8 @@
 # 原始行情数据（需 Tushare Token 自行获取）
-数据集/tushare_all_interfaces/
+数据集/tushare_all_interfaces/daily/
+数据集/tushare_all_interfaces/daily_basic/
+数据集/tushare_all_interfaces/adj_factor/
+数据集/tushare_all_interfaces/moneyflow/
 数据集/preprocessed_all_data/
 数据集/sample_all_data/
 数据集/preprocessed_sample/
