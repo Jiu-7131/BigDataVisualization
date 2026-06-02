@@ -1,8 +1,3 @@
-# 原始行情数据（需 Tushare Token 自行获取）
-数据集/preprocessed_all_data/
-数据集/sample_all_data/
-数据集/preprocessed_sample/
-
 # IDE
 .idea/
 .DS_Store

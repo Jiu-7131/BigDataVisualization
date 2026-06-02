@@ -40,6 +40,34 @@ def load_macro_data():
     return pmi, cpi, m2
 
 
+def load_social_finance():
+    """加载社融数据，计算存量同比增速"""
+    raw = "tushare_all_interfaces"
+    sf = pd.read_csv(os.path.join(raw, "social_finance.csv"))
+    sf['month'] = pd.to_datetime(sf['month'].astype(str), format='%Y%m')
+    sf = sf.sort_values('month').reset_index(drop=True)
+    # 社融存量同比增速
+    sf['sf_yoy'] = sf['stk_endval'].pct_change(12) * 100
+    # 当月增量(亿元)和累计增量
+    sf['inc_month'] = pd.to_numeric(sf['inc_month'], errors='coerce')
+    sf['inc_cumval'] = pd.to_numeric(sf['inc_cumval'], errors='coerce')
+    return sf[['month', 'inc_month', 'inc_cumval', 'stk_endval', 'sf_yoy']]
+
+
+def load_bond_data():
+    """加载10年期国债收益率，若不可用则回退到M2"""
+    raw = "tushare_all_interfaces"
+    bond_path = os.path.join(raw, "cn_10y_bond.csv")
+    if os.path.exists(bond_path):
+        bond = pd.read_csv(bond_path)
+        bond['trade_date'] = pd.to_datetime(bond['trade_date'])
+        bond['month'] = bond['trade_date'].dt.to_period('M').dt.to_timestamp()
+        monthly = bond.groupby('month')['yield'].mean().reset_index()
+        monthly.columns = ['month', 'bond_10y']
+        return monthly, True
+    return None, False
+
+
 def clean_pmi(pmi):
     """清洗 PMI 数据: PMI列名为大写 MONTH (int: 202604), PMI010000"""
     month_col = 'MONTH' if 'MONTH' in pmi.columns else 'month'
@@ -146,8 +174,15 @@ df_pmi = clean_pmi(pmi)
 df_cpi = clean_cpi(cpi)
 df_m2 = clean_m2(m2)
 
+# 加载社融和国债数据
+df_sf = load_social_finance()
+df_bond, has_bond = load_bond_data()
+
 # 合并宏观数据
 df_macro = df_pmi.merge(df_cpi, on='month', how='outer').merge(df_m2, on='month', how='outer')
+df_macro = df_macro.merge(df_sf, on='month', how='outer')
+if has_bond:
+    df_macro = df_macro.merge(df_bond, on='month', how='outer')
 df_macro = df_macro.sort_values('month').reset_index(drop=True)
 # 过滤到分析期 (2022-2026)
 df_macro = df_macro[df_macro['month'] >= pd.Timestamp('2022-01-01')].reset_index(drop=True)
@@ -157,33 +192,83 @@ df_macro = df_macro.ffill()  # 前向填充月度缺失
 df_macro['pmi_ma3'] = df_macro['pmi'].rolling(3, min_periods=1).mean()
 df_macro['pmi_trend'] = df_macro['pmi'].diff(3)  # 3个月变化
 df_macro['cpi_ma3'] = df_macro['cpi_yoy'].rolling(3, min_periods=1).mean()
+df_macro['sf_ma3'] = df_macro['sf_yoy'].rolling(3, min_periods=1).mean()
+df_macro['sf_trend'] = df_macro['sf_yoy'].diff(3)  # 社融3月趋势
 
-# 美林时钟周期判断
+# ---- 6票投票制周期判定 ----
+# 增长方向: PMI(2票) + 社融(2票)
+# 通胀方向: CPI(1票) + 国债/M2(1票)
+# 共6票，增长上行+低通胀→复苏，增长上行+高通胀→过热
+#       增长下行+低通胀→衰退，增长下行+高通胀→滞胀
+
+# PMI 投票 (2票): >50 为增长上行
+pmi_growth_votes = np.where(df_macro['pmi'] >= 50, 2, 0)
+# 社融投票 (2票): sf_yoy > 8 为增长上行
+sf_growth_votes = np.where(df_macro['sf_yoy'] >= 8, 2, 0)
+growth_votes = pmi_growth_votes + sf_growth_votes  # 0-4票
+
+# CPI 投票 (1票): cpi_yoy > 2.5 为高通胀
+cpi_inflation_votes = np.where(df_macro['cpi_yoy'] >= 2.5, 1, 0)
+# 国债/M2 投票 (1票): 国债 > 3.0 或 M2 > 10 为高通胀信号
+if has_bond and 'bond_10y' in df_macro.columns:
+    bond_inflation_votes = np.where(df_macro['bond_10y'] >= 3.0, 1, 0)
+else:
+    bond_inflation_votes = np.where(df_macro['m2_yoy'] >= 10.0, 1, 0)
+inflation_votes = cpi_inflation_votes + bond_inflation_votes  # 0-2票
+
+# 判定: 增长票 >= 3 (过半) → 增长上行; 通胀票 >= 1 → 高通胀
+growth_up = growth_votes >= 3
+high_inflation = inflation_votes >= 1
+
 conditions = [
-    # 复苏: PMI上升 + CPI温和(<3%)
-    (df_macro['pmi_trend'] > 0) & (df_macro['cpi_yoy'] < 3),
-    # 过热: PMI高位(>50且上升) + CPI上升(>3%)
-    (df_macro['pmi'] > 50) & (df_macro['pmi_trend'] >= 0) & (df_macro['cpi_yoy'] >= 3),
-    # 滞胀: PMI下降 + CPI高位(>3%)
-    (df_macro['pmi_trend'] < 0) & (df_macro['cpi_yoy'] >= 3),
-    # 衰退: PMI低位(<50)且下降 + CPI下降
-    (df_macro['pmi'] < 50) & (df_macro['pmi_trend'] <= 0) & (df_macro['cpi_yoy'] < 3),
+    growth_up & ~high_inflation,       # 增长上行 + 低通胀 → 复苏
+    growth_up & high_inflation,        # 增长上行 + 高通胀 → 过热
+    ~growth_up & high_inflation,       # 增长下行 + 高通胀 → 滞胀
+    ~growth_up & ~high_inflation,      # 增长下行 + 低通胀 → 衰退
 ]
 choices = ['复苏期', '过热期', '滞胀期', '衰退期']
 df_macro['cycle_phase'] = np.select(conditions, choices, default='过渡期')
+
+# 保存投票明细供图表使用
+df_macro['growth_votes'] = growth_votes
+df_macro['inflation_votes'] = inflation_votes
+df_macro['pmi_votes'] = pmi_growth_votes
+df_macro['sf_votes'] = sf_growth_votes
 
 # 周期阶段变迁检测
 df_macro['phase_change'] = (df_macro['cycle_phase'] != df_macro['cycle_phase'].shift(1)).astype(int)
 
 # 仪表盘指标
-df_macro['pmi_vs_50'] = df_macro['pmi'] - 50  # 高于/低于荣枯线
+df_macro['pmi_vs_50'] = df_macro['pmi'] - 50
 df_macro['growth_score'] = (
     (df_macro['pmi_vs_50'].clip(-5, 5) / 5 * 50) + 50
-).clip(0, 100)  # 增长评分 0-100
+).clip(0, 100)
+
+# 连续扩张/收缩月数 (PMI)
+pmi_above = df_macro['pmi'] >= 50
+streak = 0
+streak_arr = []
+for v in pmi_above:
+    if v:
+        streak = streak + 1 if streak > 0 else 1
+    else:
+        streak = streak - 1 if streak < 0 else -1
+    streak_arr.append(streak)
+df_macro['pmi_streak'] = streak_arr
 
 df_macro.to_csv(os.path.join(OUTPUT_DIR, "macro_cycle.csv"), index=False, encoding='utf-8-sig')
 print(f"   macro_cycle.csv: {len(df_macro)} 行")
 print(f"   周期分布:\n{df_macro['cycle_phase'].value_counts().to_string()}")
+print(f"   社融增速范围: {df_macro['sf_yoy'].min():.1f} ~ {df_macro['sf_yoy'].max():.1f}")
+if has_bond:
+    print(f"   国债收益率范围: {df_macro['bond_10y'].min():.2f} ~ {df_macro['bond_10y'].max():.2f}")
+else:
+    print(f"   国债数据不可用，使用M2作为替代")
+print(f"   最新月 ({df_macro['month'].iloc[-1].strftime('%Y-%m')}): "
+      f"PMI={df_macro['pmi'].iloc[-1]:.1f}, "
+      f"增长票={int(df_macro['growth_votes'].iloc[-1])}/4, "
+      f"通胀票={int(df_macro['inflation_votes'].iloc[-1])}/2, "
+      f"→ {df_macro['cycle_phase'].iloc[-1]}")
 
 # ============================================================
 # Step 2: 构建风格轮动数据 (图2: 市场风格轮动热力三角图)
