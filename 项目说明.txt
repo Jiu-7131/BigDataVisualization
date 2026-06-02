@@ -37,20 +37,28 @@
   若已存在预处理数据，可直接运行可视化脚本。
 
 【可视化生成】
-  python visualizations.py   → 生成12张交互式HTML + 静态PNG到 visualizations/
-  python build_dashboard.py  → 生成综合仪表盘 visualizations/index.html
+  python -m visualizations     → 生成12张交互式HTML + 静态PNG到 可视化成果/
+  (或 python visualizations.py  向后兼容薄包装，同上)
+  python build_dashboard.py    → 生成综合仪表盘 可视化成果/index.html
 
 【查看成果】
-  直接用浏览器打开 visualizations/index.html (综合仪表盘, 推荐)
-  或单独打开 visualizations/ 下任意 HTML 文件
+  直接用浏览器打开 可视化成果/index.html (综合仪表盘, 推荐)
+  或单独打开 可视化成果/ 下任意 HTML 文件
 
 【输出目录结构】
-  processed/              预处理数据 (13个CSV)
+  数据集/processed/         预处理数据 (13个CSV)
     ├── 01_industry/       行业结构层 (5个)
     ├── 02_macro/          宏观环境层 (2个)
     ├── 03_factor/         因子归因层 (3个)
     └── 04_decision/       决策支持层 (3个)
-  visualizations/         可视化成果 (12 HTML + 12 PNG + index.html)
+  可视化成果/               可视化成果 (12 HTML + 12 PNG + index.html)
+
+【代码结构】
+  config.py                 全局配置 (路径、配色、Plotly/Matplotlib主题)
+  visualizations/           图表包 (每张图独立文件)
+    ├── common.py           共享工具函数
+    ├── chart1_*.py ~ chart12_*.py  12张图表
+    └── __init__.py         注册表 + 入口
 
 【AI工具声明】
   本项目使用了 Claude Code (Anthropic) 辅助以下工作:

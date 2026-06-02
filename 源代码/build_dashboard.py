@@ -7,6 +7,8 @@
 
 import os
 
+from config import OUT_DIR, PROCESSED_02_MACRO
+
 CHARTS = [
     ("01_宏观经济周期仪表盘.html", "图1 宏观经济周期仪表盘", "宏观环境层"),
     ("02_风格轮动热力三角图.html", "图2 市场风格轮动热力三角图", "宏观环境层"),
@@ -22,7 +24,7 @@ CHARTS = [
     ("12_实时监控预警仪表盘.html", "图12 实时监控预警仪表盘", "决策支持层"),
 ]
 
-SRC_DIR = "可视化成果"
+SRC_DIR = OUT_DIR
 
 # 读取当前周期阶段（图1输出 → 传给下游作为全局参数）
 CYCLE_PHASE = "未知"
@@ -30,9 +32,7 @@ CYCLE_GROWTH_VOTES = 0
 CYCLE_INFLATION_VOTES = 0
 try:
     import pandas as pd
-    macro_path = os.path.join("数据集", "processed", "02_macro", "macro_cycle.csv")
-    if not os.path.exists(macro_path):
-        macro_path = os.path.join("processed", "02_macro", "macro_cycle.csv")
+    macro_path = os.path.join(PROCESSED_02_MACRO, "macro_cycle.csv")
     macro = pd.read_csv(macro_path)
     if len(macro) > 0:
         latest = macro.iloc[-1]
