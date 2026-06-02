@@ -60,7 +60,7 @@ def load_bond_data():
     bond_path = os.path.join(raw, "cn_10y_bond.csv")
     if os.path.exists(bond_path):
         bond = pd.read_csv(bond_path)
-        bond['trade_date'] = pd.to_datetime(bond['trade_date'])
+        bond['trade_date'] = pd.to_datetime(bond['trade_date'].astype(str), format='%Y%m%d')
         bond['month'] = bond['trade_date'].dt.to_period('M').dt.to_timestamp()
         monthly = bond.groupby('month')['yield'].mean().reset_index()
         monthly.columns = ['month', 'bond_10y']
