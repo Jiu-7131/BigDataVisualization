@@ -87,72 +87,73 @@ for fname in tqdm(daily_files, desc="   处理个股"):
     basic_path = os.path.join(basic_src, fname)
 
     try:
-        df_daily = pd.read_csv(daily_path)
-        df_daily['trade_date'] = pd.to_datetime(df_daily['trade_date'])
+        df = pd.read_csv(daily_path)
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
     except Exception:
         continue
 
-    # 尝试读取 daily_basic
-    has_basic = os.path.exists(basic_path)
-    if has_basic:
+    has_basic = False
+    if os.path.exists(basic_path):
         try:
             df_basic = pd.read_csv(basic_path)
             df_basic['trade_date'] = pd.to_datetime(df_basic['trade_date'])
-            df = df_daily.merge(df_basic[['trade_date', 'pe', 'pe_ttm', 'pb', 'total_mv', 'turnover_rate']],
-                                on='trade_date', how='left')
+            df = df.merge(df_basic[['trade_date', 'pe', 'pe_ttm', 'pb', 'total_mv', 'turnover_rate']],
+                          on='trade_date', how='left')
+            has_basic = True
         except Exception:
-            df = df_daily.copy()
-            has_basic = False
+            pass
+
+    # 向量化计算收益率
+    if 'ret' in df.columns:
+        df['_ret'] = df['ret']
+    elif 'pct_chg' in df.columns:
+        df['_ret'] = df['pct_chg'] / 100.0
     else:
-        df = df_daily.copy()
+        continue
 
-    for _, row in df.iterrows():
-        date = row['trade_date']
+    # 预过滤无效行，避免循环内逐行判断
+    valid = df['_ret'].notna()
+    if not valid.any():
+        continue
+    df = df[valid]
+
+    for row in df.itertuples():
+        date = row.trade_date
         acc = industry_accum[industry][date]
-
-        # 收益率 (从 pct_chg 或 ret 列获取)
-        if 'ret' in row and pd.notna(row['ret']):
-            ret = row['ret']
-        elif 'pct_chg' in row and pd.notna(row['pct_chg']):
-            ret = row['pct_chg'] / 100.0
-        else:
-            continue
-
-        mv = row.get('total_mv', np.nan)
-        if pd.isna(mv) or mv <= 0:
-            mv = np.nan
+        ret = row._ret
 
         acc['ret_sum'] += ret
         acc['ret_count'] += 1
         acc['pct_chg_list'].append(ret * 100)
         acc['stock_count_set'].add(ts_code)
 
-        if not np.isnan(mv):
+        mv = row.total_mv if has_basic else np.nan
+        if not (pd.isna(mv) or mv <= 0):
             acc['mv_ret_sum'] += ret * mv
             acc['mv_total'] += mv
             acc['mv_list'].append(mv)
 
         if has_basic:
-            pe = row.get('pe_ttm', row.get('pe', np.nan))
-            pb = row.get('pb', np.nan)
-            turnover = row.get('turnover_rate', np.nan)
+            pe = row.pe_ttm if pd.notna(row.pe_ttm) else row.pe
+            pb = row.pb
+            turnover = row.turnover_rate
         else:
             pe = np.nan
             pb = np.nan
             turnover = np.nan
 
-        if not np.isnan(pe) and pe > 0:
+        if not pd.isna(pe) and pe > 0:
             acc['pe_list'].append(pe)
-        if not np.isnan(pb) and pb > 0:
+        if not pd.isna(pb) and pb > 0:
             acc['pb_list'].append(pb)
-        if not np.isnan(turnover):
+        if not pd.isna(turnover):
             acc['turnover_list'].append(turnover)
 
-        vol = row.get('vol', np.nan)
-        amount = row.get('amount', np.nan)
-        if not np.isnan(vol):
+        vol = row.vol
+        amount = row.amount
+        if not pd.isna(vol):
             acc['vol_list'].append(vol)
-        if not np.isnan(amount):
+        if not pd.isna(amount):
             acc['amount_list'].append(amount)
 
 print(f"   无行业映射的股票: {skipped_no_industry}")
@@ -277,24 +278,17 @@ for (industry, q), grp in tqdm(df_daily.groupby(['industry', 'quarter']), desc="
 df_q = pd.DataFrame(quarterly_records)
 df_q = df_q.sort_values(['industry', 'quarter']).reset_index(drop=True)
 
-# 计算动量因子 (过去 N 个季度累计收益)
+# 计算动量因子 (过去 N 个季度累计收益，不含当季)
 print("   计算动量因子...")
-momentum_cols = {}
-for industry in df_q['industry'].unique():
-    ind_mask = df_q['industry'] == industry
-    ind_data = df_q[ind_mask].sort_values('quarter')
-    rets = ind_data['cum_ret'].values
-    for lag in [1, 2, 4]:
-        col_name = f'mom_{lag}q'
-        if col_name not in momentum_cols:
-            momentum_cols[col_name] = []
-        mom = pd.Series(np.nan, index=ind_data.index)
-        for i in range(len(rets)):
-            if i >= lag:
-                mom.iloc[i] = (1 + rets[i-lag:i]).prod() - 1
-        ind_data = ind_data.copy()
-        ind_data[col_name] = mom
-        df_q.loc[ind_mask, col_name] = mom.values
+df_q = df_q.sort_values(['industry', 'quarter']).reset_index(drop=True)
+cum_plus1 = df_q.groupby('industry')['cum_ret'].transform(lambda x: (1 + x).cumprod())
+for lag in [1, 2, 4]:
+    col = f'mom_{lag}q'
+    numerator = cum_plus1.groupby(df_q['industry']).shift(1)
+    denominator = cum_plus1.groupby(df_q['industry']).shift(lag + 1).fillna(1)
+    df_q[col] = numerator / denominator - 1
+    gp_pos = df_q.groupby('industry').cumcount()
+    df_q.loc[gp_pos < lag, col] = np.nan
 
 # Z-score 标准化各因子 (跨行业，每个季度)
 print("   因子 Z-score 标准化...")

@@ -221,28 +221,6 @@ if df_industry is not None:
             })
 
     df_stress = pd.DataFrame(stress_records)
-
-    # 如果依赖数据缺失，手动构造近似数据
-    if len(df_stress) == 0:
-        # 使用名义行业列表
-        default_industries = [
-            '银行', '食品饮料', '医药生物', '电子', '计算机', '电力设备',
-            '有色金属', '煤炭', '非银金融', '房地产', '汽车', '国防军工',
-            '传媒', '通信', '机械设备', '基础化工', '公用事业', '交通运输',
-            '建筑装饰', '钢铁', '石油石化', '家用电器', '农林牧渔', '商贸零售',
-            '社会服务', '纺织服饰', '轻工制造', '建筑材料', '环保', '综合', '美容护理'
-        ]
-        np.random.seed(42)
-        for event_name, (start, end) in extreme_events.items():
-            for ind in default_industries[:15]:  # 取前15个代表性行业
-                stress_records.append({
-                    'scenario': event_name,
-                    'industry': ind,
-                    'cum_return': np.random.uniform(-0.3, 0.3),
-                    'max_drawdown': np.random.uniform(-0.4, -0.02),
-                })
-        df_stress = pd.DataFrame(stress_records)
-
     df_stress.to_csv(os.path.join(OUTPUT_DIR, "stress_test_scenarios.csv"), index=False, encoding='utf-8-sig')
     print(f"   stress_test_scenarios.csv: {len(df_stress)} 行, "
           f"{df_stress['scenario'].nunique()} 个场景, {df_stress['industry'].nunique()} 个行业")
@@ -256,39 +234,38 @@ else:
 # ============================================================
 print("\nStep 3: 构建实时监控预警数据...")
 
+alert_records = []
+
 if df_industry is not None:
-    # 计算各月度各维度的异常信号
-    alert_records = []
 
     for month, grp in tqdm(df_industry.groupby('month'), desc="   计算预警"):
         if len(grp) < 5:
             continue
 
-        # 1. 行业收益率偏离度 (截面)
         ret_mean = grp['monthly_ret'].mean()
         ret_std = grp['monthly_ret'].std()
-        if ret_std and ret_std > 0:
-            for _, row in grp.iterrows():
-                z_score = (row['monthly_ret'] - ret_mean) / ret_std
-                if abs(z_score) > 1:
-                    alert_level = '关注' if abs(z_score) < 2 else ('警示' if abs(z_score) < 3 else '危险')
+        has_ret = ret_std and ret_std > 0
+
+        has_turn = 'avg_turnover' in grp.columns and not grp['avg_turnover'].isna().all()
+        if has_turn:
+            turn_mean = grp['avg_turnover'].mean()
+            turn_std = grp['avg_turnover'].std()
+            has_turn = turn_std and turn_std > 0
+
+        for _, row in grp.iterrows():
+            if has_ret:
+                z_ret = (row['monthly_ret'] - ret_mean) / ret_std
+                if abs(z_ret) > 1:
                     alert_records.append({
                         'date': month,
                         'industry': row['industry'],
                         'metric': '收益率偏离',
                         'value': row['monthly_ret'],
-                        'z_score': z_score,
-                        'alert_level': alert_level,
+                        'z_score': z_ret,
+                        'alert_level': '关注' if abs(z_ret) < 2 else ('警示' if abs(z_ret) < 3 else '危险'),
                     })
 
-    # 2. 成交量异常 (如果有交易量数据)
-    for month, grp in df_industry.groupby('month'):
-        if 'avg_turnover' not in grp.columns or grp['avg_turnover'].isna().all():
-            continue
-        turn_mean = grp['avg_turnover'].mean()
-        turn_std = grp['avg_turnover'].std()
-        if turn_std and turn_std > 0:
-            for _, row in grp.iterrows():
+            if has_turn:
                 z_turn = (row['avg_turnover'] - turn_mean) / turn_std
                 if abs(z_turn) > 2:
                     alert_records.append({
@@ -300,11 +277,8 @@ if df_industry is not None:
                         'alert_level': '警示' if abs(z_turn) < 3 else '危险',
                     })
 
-    if alert_records:
-        df_alert = pd.DataFrame(alert_records)
-    else:
-        # 生成示例数据框架
-        df_alert = pd.DataFrame(columns=['date', 'industry', 'metric', 'value', 'z_score', 'alert_level'])
+    df_alert = pd.DataFrame(alert_records) if alert_records else pd.DataFrame(
+        columns=['date', 'industry', 'metric', 'value', 'z_score', 'alert_level'])
 else:
     df_alert = pd.DataFrame(columns=['date', 'industry', 'metric', 'value', 'z_score', 'alert_level'])
 
@@ -313,23 +287,18 @@ crowding_path = os.path.join(PROCESSED_DIR, "03_factor", "factor_crowding.csv")
 if os.path.exists(crowding_path):
     df_crowding = pd.read_csv(crowding_path)
     if 'month' in df_crowding.columns and 'crowding_level' in df_crowding.columns:
-        crowd_alerts = df_crowding[df_crowding['crowding_level'].isin(['警示', '危险'])].copy()
-        if len(crowd_alerts) > 0:
-            for _, row in crowd_alerts.iterrows():
-                alert_records.append({
-                    'date': pd.Timestamp(row['month']),
-                    'industry': '全市场',
-                    'metric': '因子拥挤度',
-                    'value': row.get('crowding_score', 0),
-                    'z_score': row.get('crowding_score', 0),
-                    'alert_level': row['crowding_level'],
-                })
-    df_alert = pd.DataFrame(alert_records) if alert_records else df_alert
-
-df_alert = pd.DataFrame(alert_records) if 'alert_records' in dir() and alert_records else df_alert
-if 'date' in df_alert.columns:
-    df_alert['date'] = pd.to_datetime(df_alert['date'])
-    df_alert = df_alert.sort_values(['date', 'industry']).reset_index(drop=True)
+        for _, row in df_crowding[df_crowding['crowding_level'].isin(['警示', '危险'])].iterrows():
+            alert_records.append({
+                'date': pd.Timestamp(row['month']),
+                'industry': '全市场',
+                'metric': '因子拥挤度',
+                'value': row.get('crowding_score', 0),
+                'z_score': row.get('crowding_score', 0),
+                'alert_level': row['crowding_level'],
+            })
+        df_alert = pd.DataFrame(alert_records) if alert_records else df_alert
+df_alert['date'] = pd.to_datetime(df_alert['date'])
+df_alert = df_alert.sort_values(['date', 'industry']).reset_index(drop=True)
 
 df_alert.to_csv(os.path.join(OUTPUT_DIR, "alert_dashboard.csv"), index=False, encoding='utf-8-sig')
 print(f"   alert_dashboard.csv: {len(df_alert)} 行")

@@ -7,6 +7,8 @@
 
 import os
 
+import pandas as pd
+
 from config import OUT_DIR, PROCESSED_02_MACRO
 
 CHARTS = [
@@ -31,7 +33,6 @@ CYCLE_PHASE = "未知"
 CYCLE_GROWTH_VOTES = 0
 CYCLE_INFLATION_VOTES = 0
 try:
-    import pandas as pd
     macro_path = os.path.join(PROCESSED_02_MACRO, "macro_cycle.csv")
     macro = pd.read_csv(macro_path)
     if len(macro) > 0:

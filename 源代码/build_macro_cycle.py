@@ -74,7 +74,7 @@ def clean_pmi(pmi):
     if 'PMI010000' in pmi.columns:
         df = pmi[[month_col, 'PMI010000']].copy()
     else:
-        pmi_cols = [c for c in pmi.columns if 'PMI' in c and c not in ('CREATE_TIME', 'UPDATE_TIME', 'ID', 'UPDATE_BY', 'CREATE_BY')]
+        pmi_cols = [c for c in pmi.columns if 'PMI' in c]
         df = pmi[[month_col, pmi_cols[0]]].copy()
     df.columns = ['month', 'pmi']
     df['month'] = pd.to_datetime(df['month'].astype(str), format='%Y%m')
@@ -186,7 +186,7 @@ if has_bond:
 df_macro = df_macro.sort_values('month').reset_index(drop=True)
 # 过滤到分析期 (2022-2026)
 df_macro = df_macro[df_macro['month'] >= pd.Timestamp('2022-01-01')].reset_index(drop=True)
-df_macro = df_macro.ffill()  # 前向填充月度缺失
+df_macro = df_macro.ffill(axis=0)  # 前向填充月度缺失
 
 # 计算趋势指标
 df_macro['pmi_ma3'] = df_macro['pmi'].rolling(3, min_periods=1).mean()

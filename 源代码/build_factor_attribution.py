@@ -141,20 +141,7 @@ def build_factors(df_monthly):
             hml = np.nan
 
         # --- MOM (Momentum): 按过去12个月累计收益 ---
-        # 计算每只股票过去12个月收益（含当月）
-        grp_mom = grp[['ts_code', 'monthly_ret']].copy()
-        # get historical data
-        past_12m = df_monthly[
-            (df_monthly['month'] <= month) &
-            (df_monthly['month'] > month - pd.DateOffset(months=12))
-        ]
-        mom_12m = past_12m.groupby('ts_code')['monthly_ret'].apply(
-            lambda x: (1 + x).prod() - 1
-        ).reset_index()
-        mom_12m.columns = ['ts_code', 'mom_12m']
-
-        grp_mom = grp_mom.merge(mom_12m, on='ts_code', how='left')
-        grp_mom = grp_mom.dropna(subset=['mom_12m'])
+        grp_mom = grp.dropna(subset=['mom_12m'])
         if len(grp_mom) >= 30:
             try:
                 grp_mom['mom_rank'] = pd.qcut(grp_mom['mom_12m'], N_PORTFOLIOS, labels=False, duplicates='drop')
@@ -295,14 +282,11 @@ def compute_crowding(df_monthly):
 
     df_crowd = pd.DataFrame(crowding_records)
 
-    # 标准化并合成综合拥挤度分数
+    # 用 expanding 标准化 (避免前视偏差)
     for col in ['valuation_spread', 'within_factor_corr', 'turnover_hhi']:
-        mu = df_crowd[col].mean()
-        std = df_crowd[col].std()
-        if std and std > 0:
-            df_crowd[f'{col}_z'] = (df_crowd[col] - mu) / std
-        else:
-            df_crowd[f'{col}_z'] = 0
+        exp_mean = df_crowd[col].expanding(min_periods=12).mean()
+        exp_std = df_crowd[col].expanding(min_periods=12).std()
+        df_crowd[f'{col}_z'] = ((df_crowd[col] - exp_mean) / exp_std.replace(0, np.nan)).fillna(0)
 
     z_cols = [c for c in df_crowd.columns if c.endswith('_z')]
     df_crowd['crowding_score'] = df_crowd[z_cols].mean(axis=1)
@@ -325,6 +309,12 @@ print("=" * 60)
 # Step 1: 加载个股月度数据
 print("\nStep 1: 加载个股月度收益率和基本面数据...")
 df_monthly = load_stock_monthly_returns()
+
+# Pre-compute 12-month momentum per stock (avoid O(n*m) scan per month)
+print("   预计算动量因子...")
+df_monthly = df_monthly.sort_values(['ts_code', 'month'])
+cum_plus1 = df_monthly.groupby('ts_code')['monthly_ret'].transform(lambda x: (1 + x).cumprod())
+df_monthly['mom_12m'] = cum_plus1 / cum_plus1.groupby(df_monthly['ts_code']).shift(12).fillna(1) - 1
 
 # Step 2: 构建因子收益率
 print("\nStep 2: 构建 SMB/HML/MOM 因子...")
