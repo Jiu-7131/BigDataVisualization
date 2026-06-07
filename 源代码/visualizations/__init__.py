@@ -22,7 +22,8 @@ from .chart1_macro_dashboard import generate as generate_chart1
 from .chart2_style_rotation import generate as generate_chart2
 from .chart3_calendar_heatmap import generate as generate_chart3
 from .chart4_bubble_chart import generate as generate_chart4
-from .chart5_correlation_network import generate as generate_chart5
+# 图5暂时移除
+# from .chart5_correlation_network import generate as generate_chart5
 from .chart6_parallel_coordinates import generate as generate_chart6
 from .chart7_factor_waterfall import generate as generate_chart7
 from .chart8_crowding_dashboard import generate as generate_chart8
@@ -36,7 +37,7 @@ CHART_REGISTRY = [
     ('图2 风格轮动热力三角图', generate_chart2),
     ('图3 日历热力图', generate_chart3),
     ('图4 动态气泡图', generate_chart4),
-    ('图5 行业相关性网络图', generate_chart5),
+    ('图5 行业相关性网络图', None),  # 暂时移除
     ('图6 平行坐标图', generate_chart6),
     ('图7 因子收益分析', generate_chart7),
     ('图8 因子拥挤度监控', generate_chart8),
@@ -53,6 +54,9 @@ def run_all(data=None):
         data = load_all()
 
     for name, func in CHART_REGISTRY:
+        if func is None:
+            print(f"  [{name}] (已跳过)")
+            continue
         try:
             print(f"  [{name}]")
             func(data)

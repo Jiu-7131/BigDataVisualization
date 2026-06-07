@@ -18,7 +18,8 @@
       "Bash(python -c \"from visualizations.common import load_all; from visualizations.chart2_style_rotation import generate; generate\\(load_all\\(\\)\\)\")",
       "Bash(python -c ' *)",
       "Bash(python -c \"from visualizations.common import load_all; from visualizations.chart3_calendar_heatmap import generate; generate\\(load_all\\(\\)\\)\")",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(awk '{print $5}')"
     ]
   }
 }
