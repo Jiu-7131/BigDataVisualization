@@ -2,123 +2,131 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 行为准则
-
-以下准则源自 Andrej Karpathy 的 CLAUDE.md，用于减少 LLM 编码中的常见错误。
-对于简单任务可用自己的判断，不必死板遵循。
-
-### 1. 先思考再编码
-
-**不假设、不隐藏困惑、明确说出取舍。**
-
-实现之前：
-- 明确说出你的假设。如果不确定，先问。
-- 如果存在多种理解方式，列出来 — 不要悄悄选择。
-- 如果有更简单的方式，说出来。必要时应提出异议。
-- 如果有不清楚的地方，停下来，指出哪里困惑，然后问。
-
-### 2. 简洁优先
-
-**用最少代码解决问题。不写臆测性代码。**
-
-- 不添加用户没要求的功能。
-- 不为只使用一次的代码创建抽象。
-- 不添加不会被触发的错误处理。
-- 如果你写了 200 行而 50 行就够了，重写。
-
-自问："一个资深工程师会认为这过度复杂吗？" 如果是，简化。
-
-### 3. 精准修改
-
-**只改必须改的。只清理自己造成的混乱。**
-
-编辑已有代码时：
-- 不要"顺便优化"相邻代码、注释或格式。
-- 不要重构没坏的东西。
-- 匹配已有代码风格，即使你自己的做法不同。
-- 如果你发现无关的死代码，提出来 — 但不要删除。
-
-当你引入的变更造成了孤立代码（未使用的 import/变量/函数）：
-- 删除掉你引入的变更所造成的孤立代码。
-- 不要删除预先存在的死代码，除非用户要求。
-
-检验标准：每一行改动都应该能追溯到用户的需求。
-
-### 4. 目标驱动执行
-
-**定义成功标准。循环直到验证通过。**
-
-将任务转化为可验证的目标：
-- "添加验证" → "为无效输入写测试，然后让它通过"
-- "修 bug" → "写一个能复现的测试，然后让它通过"
-- "重构 X" → "确保重构前后测试都通过"
-
-对多步骤任务，先简述方案，每步带验证检查点。
-强的成功标准让你能独立循环推进，弱的标准（"让它能跑"）需要不断问用户。
-
----
-
 ## 项目概述
 
-股票市场行业轮动与因子收益分析 — 大数据可视化课程期末项目。
+股票市场行业轮动与因子收益分析 — 大数据可视化课程期末项目。分析 2022–2025 年中国 A 股市场，通过四层数据流水线 + 12 张交互式 Plotly 图表，探索行业轮动、宏观经济周期、因子收益与决策支持。
 
-分析 2022-2025 年中国 A 股市场，通过四层数据处理流水线生成 12 张交互式 Plotly 图表，探索行业轮动、宏观经济周期、因子收益与决策支持。
+多人协作项目，远程仓库: `https://github.com/Jiu-7131/BigDataVisualization.git`
 
 ## 常用命令
 
 ```bash
 # 安装依赖
-pip install pandas numpy plotly kaleido networkx matplotlib seaborn tqdm scikit-learn
+pip install pandas numpy plotly kaleido networkx matplotlib seaborn tqdm
 
 # 数据处理流水线（必须在 源代码/ 目录下按顺序执行）
 cd 源代码/
-python build_industry_data.py      # 第1层: 行业聚合 → processed/01_industry/
-python build_macro_cycle.py        # 第2层: 宏观环境 → processed/02_macro/
-python build_factor_attribution.py # 第3层: 因子归因 → processed/03_factor/
-python build_decision_support.py   # 第4层: 决策支持 → processed/04_decision/
+python build_industry_data.py              # 第1层: 行业聚合
+python build_macro_cycle.py                # 第2层: 宏观环境
+python build_factor_attribution.py         # 第3层: 因子归因
+python build_decision_support.py           # 第4层: 决策支持
 
 # 生成可视化
-python -m visualizations           # 推荐：模块方式，12 张 HTML + PNG → 可视化成果/
-python visualizations.py           # 兼容：薄包装，同上
-python build_dashboard.py          # 综合仪表盘 → 可视化成果/index.html
+python -m visualizations                   # 12张 HTML + PNG → 可视化成果/
+python visualizations.py                   # 兼容：薄包装，同上
+python build_dashboard.py                  # 综合仪表盘 → 可视化成果/index.html
 
 # 查看结果：用浏览器打开 可视化成果/index.html
+
+# Git/GitHub（多人协作）
+git pull --rebase origin main             # 拉取最新变更
+git status && git diff --staged            # 提交前检查
+git add <files> && git commit -m "消息"    # 本地提交
+git push origin main                       # 推送到远程
 ```
+
+## Git 工作流
+
+- **分支策略**：直接在 main 上工作（小型团队项目），涉及实验性修改时先开 feature 分支
+- **提交规范**：每次有意义的修改后执行一次 commit + push，保持提交粒度适中（一个功能/一个修复 = 一个 commit）
+- **Pull 策略**：每次开始工作前先 `git pull --rebase`，避免 merge commit 污染历史
+- **Commit 消息格式**：中文，简明扼要说清楚"做了什么"和"为什么"
+- **修改后自动提交**：每次完成代码修改（数据处理脚本、图表、配置等）后，确认能正常运行，然后立即 commit + push，使远程始终反映最新状态
 
 ## 代码架构
 
 ### 四层数据流水线
 
-| 层 | 脚本 | 输出目录 | 产出 CSV |
+| 层 | 脚本 | 输出目录 | 产出 |
 |---|---|---|---|
-| 1. 行业聚合 | `build_industry_data.py` | `processed/01_industry/` | 5 个（日度/月度/季度聚合、滚动相关性、聚类） |
-| 2. 宏观环境 | `build_macro_cycle.py` | `processed/02_macro/` | 2 个（美林时钟周期、风格因子月度数据） |
-| 3. 因子归因 | `build_factor_attribution.py` | `processed/03_factor/` | 3 个（因子收益、行业归因分解、拥挤度） |
-| 4. 决策支持 | `build_decision_support.py` | `processed/04_decision/` | 3 个（桑基图数据、压力测试、预警仪表盘） |
+| 1. 行业聚合 | `build_industry_data.py` | `processed/01_industry/` | 5 CSV（日度/月度/季度聚合、滚动相关性、聚类） |
+| 2. 宏观环境 | `build_macro_cycle.py` | `processed/02_macro/` | 2 CSV（美林时钟周期、风格因子月度数据） |
+| 3. 因子归因 | `build_factor_attribution.py` | `processed/03_factor/` | 3 CSV（因子收益、行业归因分解、拥挤度；因子收益率用截面回归法计算） |
+| 4. 决策支持 | `build_decision_support.py` | `processed/04_decision/` | 3 CSV + signals/ 子目录（桑基图数据、压力测试、预警仪表盘信号） |
 
-每层读取上一层输出的 CSV，产出本层 CSV。CSV 是层间唯一的数据交换格式。
+CSV 是层间唯一数据交换格式。每层只读前序层输出的 CSV，不跨层读取原始数据。
 
 ### 可视化层
 
-- `config.py` — 全局配置：路径常量（基于 `__file__` 推导，不依赖 CWD）、配色方案、Plotly/Matplotlib 主题设置。
-- `visualizations/` 包 — 每张图表独立一个文件（`chart1_macro_dashboard.py` ~ `chart12_alert_dashboard.py`），每个导出 `generate(data)` 函数。
-  - `common.py` — 共享工具：`dark_figure()`, `dark_layout()`, `load_all()`, `save()`, `get_gauge_color()`
-  - `__init__.py` — 图表注册表 `CHART_REGISTRY` + `run_all()` 入口
-- `visualizations.py` — 向后兼容薄包装，委托给 `visualizations/` 包。
-- `build_dashboard.py` — 生成纯 HTML/CSS/JS 综合仪表盘（无框架），左侧边栏导航，iframe 嵌入各图表。
+- `config.py` — 全局配置：绝对路径（基于 `__file__` 推导）、TradingView 暗色主题配色、Plotly/Matplotlib 全局设置
+- `visualizations/` 包 — 12 个图表文件，每个导出 `generate(data)` 函数
+  - `common.py` — `dark_figure()`, `dark_layout()`, `load_all()`, `save()`, `get_gauge_color()`
+  - `__init__.py` — 注册表 `CHART_REGISTRY` + `run_all()` 入口
+- `visualizations.py` — 向后兼容包装，委托给 `visualizations/` 包
 
-### 金融暗色主题
+### 图间数据流
 
-配色常量定义在 `config.py`，风格模仿 TradingView/Bloomberg 暗色终端：
-- 背景三层：`BG_DARK`（画布底）、`BG_PLOT`（绘图区）、`BG_SIDEBAR`（侧边栏）
-- 周期/风格/预警色映射在 `COLORS` 字典中
-- 工具函数 `dark_figure()` 和 `dark_layout()` 在 `visualizations/common.py`
+```
+图1(宏观) ──周期标签──→ 图3(热力图) ──行业胜率──→ 图10(桑基图)
+    │                      │                        ↑
+    ├──→ 图2(风格)        ├──→ 图4(气泡)          │
+    │                      │                        │
+    └──→ 图9(箱线图)      ├──→ 图5(网络) ──群落──→ 图6(平行坐标)
+                           │                        │
+                           └──→ 图6(因子得分) ──→ 图7(瀑布图)
+                                    │                    │
+                                    └──→ 图8(拥挤度) ←──┘
 
-### 数据来源
+                          图12(预警) ←── signals/ ←── 图1-11
+```
 
-Tushare Pro API，需注册获取 token。原始数据不包含在仓库中，`数据集/` 目录仅含获取说明。数据预处理脚本 `全部数据预处理.py` 负责下载和清洗。
+## 关键设计决策（已定案）
 
-## 关键约定
+以下决策来自 `图表设计文档.md` 的优化讨论，新代码必须遵守：
 
-- **绝对路径**：`config.py` 使用 `__file__` 推导项目根目录，所有路径为绝对路径，脚本可在任意目录运行（但推荐从 `源代码/` 执行）。
-- **图表拆分**：每张图表独立一个文件在 `visualizations/` 包中，添加新图表时遵循已有函数命名模式 `chart{N}_{name}` 并在 `__init__.py` 的 `CHART_REGISTRY` 中注册。
+| 决策 | 内容 |
+|---|---|
+| 周期判定算法 | 规则引擎（PMI↑+CPI↓=复苏, 等），输出 JSON 含 phase/confidence/drivers |
+| 因子收益率 | 在第3层用截面回归法（多空组合）计算，写入 `factor_returns.csv` |
+| 图2 图表类型 | 四象限散点图（大小盘溢价 × 价值成长溢价），非三元相图 |
+| 交互精简 | 跨图跳改用 URL 参数（`chart6.html?highlight=动量`），放弃实时跨页通信 |
+| 实施顺序 | A: 1→2→9 → B: 3→5→6 → C: 4→7→8 → D: 10→11 → E: 12 |
+
+## 每张图的成功标准
+
+每图只回答**一个核心问题**：
+
+| 图 | 核心问题 |
+|---|---|
+| 1 | 当前处于经济周期的哪个阶段？ |
+| 2 | 风格向哪个方向漂移？ |
+| 3 | 哪些行业持续跑赢/跑输？ |
+| 4 | 行业风险收益如何变化？ |
+| 5 | 哪些行业关联性最强？ |
+| 6 | 行业在因子空间中的定位？ |
+| 7 | 超额收益来自哪些因子？ |
+| 8 | 哪些因子过度拥挤？ |
+| 9 | 不同周期下哪些行业更好？ |
+| 10 | 当前应配置哪些行业？ |
+| 11 | 极端情景下哪个行业最脆弱？ |
+| 12 | 当前哪些指标预警？ |
+
+## 改动范围约定
+
+**不可动**（已验证/提交，改动需团队讨论）：
+- 四层流水线架构和顺序依赖
+- `config.py` 的路径推导和配色常量
+- `visualizations/common.py` 的工具函数签名
+- `visualizations/__init__.py` 的注册表机制
+
+**可动**（单文件范围，不影响其他图表）：
+- 各 `chartN_*.py` 的可视化元素和交互逻辑
+- 每图的数据处理逻辑（在其文件范围内）
+
+## 颜色与主题
+
+金融暗色主题，TradingView 风格：
+- `BG_DARK=#0f1923`, `BG_PLOT=#1a2332`, `BG_SIDEBAR=#131c27`
+- 周期色：复苏=蓝、过热=红、滞胀=橙、衰退=紫
+- 预警色：正常=绿、关注=黄、警示=橙、危险=红
+- 图表用 `dark_figure()` / `dark_layout()` 初始化，配色常量从 `config.py` 引用
