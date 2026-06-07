@@ -17,8 +17,8 @@
 
 ```
 BigDataVisualization/
-├── 项目说明.txt              # 运行说明
-├── 数据来源说明.txt          # 数据来源文档
+├── 项目说明.md               # 运行说明
+├── 数据来源说明.md           # 数据来源文档
 ├── README.md                 # 本文件
 ├── 项目报告.html             # 完整项目报告 (浏览器打开 → 打印为PDF)
 ├── CLAUDE.md                 # Claude Code 项目指引
@@ -54,4 +54,4 @@ BigDataVisualization/
 
 ## 运行方式
 
-详见 [项目说明.txt](./项目说明.txt)
+详见 [项目说明.md](./项目说明.md)
