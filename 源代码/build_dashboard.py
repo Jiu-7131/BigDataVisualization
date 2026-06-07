@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-将12张独立图表整合到一个仪表盘页面
-侧边栏导航 + 单图全屏 — 一次看一张完整图表，点击切换
+综合仪表盘 — "数据画廊"
+全暗沉浸式，每张图表作为独立展品展示，配分析注释卡片。
+
+依赖: config.py (路径/配色常量)
+输出: 可视化成果/index.html
 """
 
 import os
@@ -11,35 +14,54 @@ import pandas as pd
 
 from config import OUT_DIR, PROCESSED_02_MACRO
 
+# ============================================================
+# 图表注册表
+# ============================================================
 CHARTS = [
-    ("01_宏观经济周期仪表盘.html", "图1 宏观经济周期仪表盘", "宏观环境层"),
-    ("02_风格轮动热力三角图.html", "图2 市场风格轮动热力三角图", "宏观环境层"),
-    ("03_日历热力图.html", "图3 行业收益率日历热力图", "行业结构层"),
-    ("04_动态气泡图.html", "图4 行业轮动动态气泡图", "行业结构层"),
-    ("05_行业相关性网络图.html", "图5 行业相关性网络图", "行业结构层"),
-    ("06_平行坐标图.html", "图6 行业多维特征平行坐标图", "因子归因层"),
-    ("07_因子收益分析.html", "图7 因子收益贡献瀑布图", "因子归因层"),
-    ("08_因子拥挤度监控.html", "图8 因子拥挤度监控仪表", "因子归因层"),
-    ("09_牛熊周期箱线图.html", "图9 牛熊周期行业箱线图", "决策支持层"),
-    ("10_行业配置桑基图.html", "图10 行业配置决策桑基图", "决策支持层"),
-    ("11_压力测试热图.html", "图11 极端情景压力测试热图", "决策支持层"),
-    ("12_实时监控预警仪表盘.html", "图12 实时监控预警仪表盘", "决策支持层"),
+    ("01_宏观经济周期仪表盘.html",      "图1  宏观经济周期仪表盘",      "宏观环境层"),
+    ("02_风格轮动热力三角图.html",      "图2  市场风格轮动热力三角图",  "宏观环境层"),
+    ("03_日历热力图.html",             "图3  行业收益率日历热力图",     "行业结构层"),
+    ("04_动态气泡图.html",            "图4  行业轮动动态气泡图",       "行业结构层"),
+    ("05_行业相关性网络图.html",       "图5  行业相关性网络图",         "行业结构层"),
+    ("06_平行坐标图.html",            "图6  行业多维特征平行坐标图",   "因子归因层"),
+    ("07_因子收益分析.html",           "图7  因子收益贡献瀑布图",      "因子归因层"),
+    ("08_因子拥挤度监控.html",         "图8  因子拥挤度监控仪表",       "因子归因层"),
+    ("09_牛熊周期箱线图.html",         "图9  牛熊周期行业箱线图",      "决策支持层"),
+    ("10_行业配置桑基图.html",         "图10  行业配置决策桑基图",     "决策支持层"),
+    ("11_压力测试热图.html",           "图11  极端情景压力测试热图",   "决策支持层"),
+    ("12_实时监控预警仪表盘.html",     "图12  实时监控预警仪表盘",     "决策支持层"),
 ]
+
+# 每张图的分析注释
+ANALYSIS_NOTES = {
+    1:  "通过PMI、CPI、国债收益率、社融四个核心指标综合判定当前所处的经济周期阶段（复苏/过热/滞胀/衰退），为后续行业配置提供宏观背景。",
+    2:  "追踪大小盘风格（沪深300价值/成长 vs 中证1000）的漂移轨迹，判断当前市场偏好大盘还是小盘、价值还是成长。",
+    3:  "以日历热力图展示31个申万一级行业月度收益率排名，红色=跑赢、蓝色=跑输，可直观识别行业轮动规律和连胜/连败模式。",
+    4:  "以气泡图动态展示各行业的风险-收益特征变化，观察行业在四象限（进攻/理想/防御/陷阱）之间的跨周期迁移。",
+    5:  "通过网络图揭示行业间的关联结构，连线越粗关联越强，可识别抱团现象、\"桥梁行业\"以及行业群落划分。",
+    6:  "用平行坐标展示各行业在估值、动量、质量、波动率等多因子维度上的综合得分轮廓，支持拖拽刷选筛选行业。",
+    7:  "将行业超额收益拆解为各因子的贡献，绿色柱=正向贡献、红色柱=负向贡献，直观展示收益来源结构。",
+    8:  "监控四大因子的拥挤程度，指针进入红色区表示过度拥挤、因子可能失效，辅助判断是否应回避该因子。",
+    9:  "对比不同经济周期阶段下各行业的收益率分布，识别各阶段的优势行业（如复苏期周期行业、衰退期防御行业）。",
+    10: "桑基图展示从\"宏观环境→风格偏好→行业推荐\"的完整决策链，流量越宽表示推荐权重越高。",
+    11: "模拟利率飙升、通胀冲击、流动性紧缩等极端情景下各行业的预期回撤，评估哪些行业最为脆弱。",
+    12: "汇总前11张图表的关键信号，在单个仪表盘上集中监控行业轮动、因子失效、拥挤交易、风格切换等预警指标。",
+}
 
 SRC_DIR = OUT_DIR
 
-# 读取当前周期阶段（图1输出 → 传给下游作为全局参数）
+# 读取当前周期阶段
 CYCLE_PHASE = "未知"
-CYCLE_GROWTH_VOTES = 0
-CYCLE_INFLATION_VOTES = 0
+CONFIDENCE = "--"
 try:
     macro_path = os.path.join(PROCESSED_02_MACRO, "macro_cycle.csv")
     macro = pd.read_csv(macro_path)
     if len(macro) > 0:
         latest = macro.iloc[-1]
         CYCLE_PHASE = latest.get('cycle_phase', '未知')
-        CYCLE_GROWTH_VOTES = int(latest.get('growth_votes', 0))
-        CYCLE_INFLATION_VOTES = int(latest.get('inflation_votes', 0))
+        CONFIDENCE = latest.get('confidence', '--')
+        if isinstance(CONFIDENCE, float):
+            CONFIDENCE = f"{CONFIDENCE:.0%}"
 except Exception:
     pass
 
@@ -51,237 +73,593 @@ if missing:
     print("请先运行 visualizations.py 生成所有图表")
     exit(1)
 
-LAYER_DOTS = {"宏观环境层": "#3498db", "行业结构层": "#2ecc71",
-              "因子归因层": "#f39c12", "决策支持层": "#e74c3c"}
-
 CYCLE_COLORS = {
     "复苏期": "#4fc3f7", "过热期": "#ef5350",
     "滞胀期": "#ffb74d", "衰退期": "#5c6bc0",
     "过渡期": "#546e7a", "未知": "#555",
 }
 
-html = """<!DOCTYPE html>
+LAYER_COLORS = {
+    "宏观环境层": "#4fc3f7",
+    "行业结构层": "#66bb6a",
+    "因子归因层": "#ffb74d",
+    "决策支持层": "#ef5350",
+}
+
+# ============================================================
+# HTML 模板
+# ============================================================
+html = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>股票市场行业轮动与因子收益分析 — 综合仪表盘</title>
+<title>股票市场行业轮动与因子收益分析 — 数据画廊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* ===== Reset & Base ===== */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: #1a1a2e; color: #ccc; display: flex;
+    font-family: 'Outfit', 'Noto Serif SC', sans-serif;
+    background: #0a0e17;
+    color: #e0e4eb;
+    display: flex;
+    flex-direction: column;
   }
 
-  /* ===== 侧边栏 ===== */
-  .sidebar {
-    width: 280px; min-width: 280px; height: 100vh;
-    background: #16162a;
-    display: flex; flex-direction: column;
-    border-right: 1px solid rgba(255,255,255,0.08);
-    user-select: none;
+  /* ===== Top Bar ===== */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: rgba(10, 14, 23, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+    z-index: 10;
+    backdrop-filter: blur(12px);
   }
-  .sidebar-header {
-    padding: 20px 18px 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
-  .sidebar-header h1 {
-    font-size: 16px; font-weight: 700; color: #fff; line-height: 1.4;
+  .project-title {
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: 0.3px;
+    color: #f0f2f5;
   }
-  .sidebar-header .subtitle {
-    font-size: 10px; color: #666; margin-top: 2px;
+  .project-subtitle {
+    font-size: 11px;
+    color: #787b86;
+    font-weight: 400;
+  }
+  .cycle-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .cycle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .top-bar-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .progress-dot-group {
+    display: flex;
+    gap: 5px;
+  }
+  .progress-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    padding: 0;
+  }
+  .progress-dot:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+  .progress-dot.active {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+  }
+  .progress-dot.visited {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .progress-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #787b86;
+    min-width: 36px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn-icon {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #787b86;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+  }
+  .btn-icon:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e4eb;
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
-  /* 搜索过滤 */
-  .sidebar-search {
-    padding: 10px 14px;
+  /* ===== Main Content ===== */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
   }
-  .sidebar-search input {
-    width: 100%; padding: 7px 10px; border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.1); background: #1e1e38;
-    color: #ccc; font-size: 12px; outline: none;
+  .chart-frame-wrap {
+    flex: 1;
+    position: relative;
+    background: #0f1923;
+    margin: 0;
   }
-  .sidebar-search input:focus { border-color: #3498db; }
-
-  /* 图表列表 */
-  .sidebar-nav {
-    flex: 1; overflow-y: auto; padding: 6px 0;
+  .chart-frame-wrap iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+    opacity: 0;
+    animation: fadeInChart 0.35s ease forwards;
   }
-  .sidebar-nav::-webkit-scrollbar { width: 4px; }
-  .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-
-  .layer-group { margin-bottom: 2px; }
-  .layer-label {
-    padding: 10px 18px 6px; font-size: 10px; text-transform: uppercase;
-    letter-spacing: 1px; color: #666; font-weight: 600;
-  }
-  .chart-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 18px; cursor: pointer; transition: background 0.15s;
-    border-left: 3px solid transparent; font-size: 13px; color: #aaa;
-  }
-  .chart-item:hover { background: rgba(255,255,255,0.04); color: #ddd; }
-  .chart-item.active {
-    background: rgba(255,255,255,0.08); color: #fff;
-    border-left-color: #3498db;
-  }
-  .chart-item .dot {
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  }
-  .chart-item .num {
-    font-size: 10px; color: #555; width: 18px; flex-shrink: 0;
+  @keyframes fadeInChart {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
-  /* 快捷键提示 */
-  .sidebar-footer {
-    padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.08);
-    font-size: 10px; color: #555;
+  /* ===== Analysis Note Card ===== */
+  .note-bar {
+    flex-shrink: 0;
+    padding: 14px 28px;
+    background: #111827;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    min-height: 62px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
   }
-  .sidebar-footer kbd {
-    display: inline-block; padding: 1px 5px; border-radius: 3px;
-    border: 1px solid #444; background: #222; font-family: inherit;
-    margin: 0 2px;
+  .note-icon {
+    font-size: 18px;
+    line-height: 1.5;
+    color: #f59e0b;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .note-text {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: #94a3b8;
+    font-family: 'Noto Serif SC', serif;
+    max-width: 820px;
+  }
+  .note-text strong {
+    color: #e0e4eb;
+    font-weight: 600;
+  }
+  .note-chart-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: #f59e0b;
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
   }
 
-  /* ===== 主视图 ===== */
-  .main-view {
-    flex: 1; height: 100vh; display: flex; flex-direction: column;
-    background: #fff;
+  /* ===== Bottom Nav ===== */
+  .bottom-nav {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 12px 28px;
+    background: rgba(10, 14, 23, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
-  .main-header {
-    padding: 10px 20px; background: #fafbfc; border-bottom: 1px solid #eee;
-    display: flex; align-items: center; justify-content: space-between;
+  .nav-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    padding: 7px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e4eb;
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .nav-btn:active {
+    transform: scale(0.97);
+  }
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .dots-nav {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* ===== Search Overlay ===== */
+  .search-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 80px;
+  }
+  .search-overlay.open { display: flex; }
+  .search-panel {
+    background: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    width: 480px;
+    max-width: 90vw;
+    max-height: 60vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideDown 0.2s ease;
+  }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .search-panel input {
+    width: 100%;
+    padding: 16px 20px;
+    background: transparent;
+    border: none;
+    color: #e0e4eb;
+    font-size: 15px;
+    font-family: 'Outfit', sans-serif;
+    outline: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .search-panel input::placeholder { color: #787b86; }
+  .search-results {
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .search-results::-webkit-scrollbar { width: 4px; }
+  .search-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+  .search-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 14px;
+  }
+  .search-item:hover { background: rgba(255, 255, 255, 0.06); }
+  .search-item .s-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     flex-shrink: 0;
   }
-  .main-header .chart-title { font-size: 15px; font-weight: 600; color: #1a1a2e; }
-  .main-header .nav-btns { display: flex; gap: 4px; }
-  .main-header button {
-    padding: 6px 16px; border: 1px solid #ddd; background: #fff;
-    border-radius: 4px; cursor: pointer; font-size: 12px; color: #555;
-    transition: all 0.15s;
+  .search-item .s-num {
+    font-size: 11px;
+    color: #787b86;
+    width: 24px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
-  .main-header button:hover { background: #f0f0f0; border-color: #bbb; }
-  .main-header button:active { background: #e0e0e0; }
-  .main-iframe {
-    flex: 1; width: 100%; border: none;
-  }
-  .main-placeholder {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    color: #ccc; font-size: 18px;
+  .search-item .s-layer {
+    font-size: 11px;
+    color: #787b86;
+    margin-left: auto;
   }
 
-  /* ===== 响应式: 窄屏时侧边栏折叠 ===== */
+  /* ===== Keyboard hint ===== */
+  .kbd-hint {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.12);
+    font-family: 'Outfit', sans-serif;
+    pointer-events: none;
+    user-select: none;
+    letter-spacing: 0.5px;
+  }
+  .kbd-hint kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    margin: 0 1px;
+  }
+
+  /* ===== Responsive ===== */
   @media (max-width: 768px) {
-    .sidebar { width: 60px; min-width: 60px; }
-    .sidebar-header h1 { font-size: 13px; }
-    .sidebar-header .subtitle, .layer-label, .chart-item span:not(.dot):not(.num),
-    .sidebar-search, .sidebar-footer { display: none; }
-    .chart-item { padding: 10px 12px; justify-content: center; }
-    .chart-item .num { display: inline; width: auto; }
+    .top-bar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
+    .project-subtitle { display: none; }
+    .cycle-badge { font-size: 10px; padding: 3px 10px; }
+    .progress-dot { width: 8px; height: 8px; }
+    .progress-label { font-size: 11px; min-width: 28px; }
+    .note-bar { padding: 10px 16px; flex-wrap: wrap; gap: 6px; }
+    .note-text { font-size: 12px; }
+    .note-chart-title { white-space: normal; }
+    .bottom-nav { padding: 10px 16px; gap: 12px; flex-wrap: wrap; }
+    .nav-btn { font-size: 12px; padding: 5px 12px; }
+    .search-panel { width: 95vw; }
+    .top-bar-right .btn-icon { width: 30px; height: 30px; font-size: 14px; }
+  }
+
+  @media (max-width: 480px) {
+    .top-bar-center { order: 3; width: 100%; justify-content: center; }
+    .note-chart-title { width: 100%; }
   }
 </style>
 </head>
 <body>
 
-<div class="sidebar">
-  <div class="sidebar-header">
-    <h1>行业轮动与<br>因子收益分析</h1>
-    <div class="subtitle">A股 2022-2026 | 12张图表</div>
+<!-- ===== Top Bar ===== -->
+<header class="top-bar">
+  <div class="top-bar-left">
+    <div>
+      <div class="project-title">行业轮动与因子收益分析</div>
+      <div class="project-subtitle">A股 2022–2025 · 12 张交互式图表</div>
+    </div>
+    <span class="cycle-badge">
+      <span class="cycle-dot" style="background:""" + CYCLE_COLORS.get(CYCLE_PHASE, '#555') + """"></span>
+      """ + CYCLE_PHASE + (f" · {CONFIDENCE}" if CONFIDENCE != "--" else "") + """
+    </span>
   </div>
-  <div class="sidebar-search">
-    <input type="text" id="search" placeholder="搜索图表..." oninput="filterCharts()">
+  <div class="top-bar-center">
+    <div class="progress-dot-group" id="progressDots"></div>
+    <span class="progress-label" id="progressLabel">1 / """ + str(len(CHARTS)) + """</span>
   </div>
-  <div class="sidebar-nav" id="sidebarNav">
-"""
-
-# ===== 构建侧边栏列表 =====
-LAYERS_ORDER = ["宏观环境层", "行业结构层", "因子归因层", "决策支持层"]
-layer_groups = {l: [] for l in LAYERS_ORDER}
-for fname, title, layer in CHARTS:
-    layer_groups[layer].append((fname, title))
-
-idx = 0
-for layer_name in LAYERS_ORDER:
-    charts_in_layer = layer_groups[layer_name]
-    dot_color = LAYER_DOTS[layer_name]
-    html += f'    <div class="layer-group"><div class="layer-label">{layer_name}</div>\n'
-    for fname, title in charts_in_layer:
-        idx += 1
-        html += f"""      <div class="chart-item" data-index="{idx}" data-file="{fname}"
-           data-title="{title}" data-layer="{layer_name}"
-           onclick="selectChart({idx})">
-        <span class="num">{idx}</span>
-        <span class="dot" style="background:{dot_color}"></span>
-        <span>{title}</span>
-      </div>
-"""
-    html += '    </div>\n'
-
-html += """  </div>
-  <div class="sidebar-footer">
-    <kbd>&uarr;</kbd><kbd>&darr;</kbd> 切换 &nbsp; <kbd>1</kbd>-<kbd>9</kbd> 快速跳转
+  <div class="top-bar-right">
+    <button class="btn-icon" onclick="toggleSearch()" title="搜索图表 (Ctrl+K)">&#128269;</button>
   </div>
-</div>
+</header>
 
-<div class="main-view">
-  <div class="main-header">
-    <span class="chart-title" id="mainTitle">图1 宏观经济周期仪表盘</span>
-    <span id="cycleBadge" style="padding:4px 12px;border-radius:12px;
-      font-size:11px;font-weight:600;color:#fff;
-      background:""" + CYCLE_COLORS.get(CYCLE_PHASE, '#555') + """">当前周期: """ + CYCLE_PHASE + f""" (增长{CYCLE_GROWTH_VOTES}/4 通胀{CYCLE_INFLATION_VOTES}/2)</span>
-    <div class="nav-btns">
-      <button onclick="prevChart()" title="上一张 (↑)">&larr; 上一张</button>
-      <button onclick="nextChart()" title="下一张 (↓)">下一张 &rarr;</button>
+<!-- ===== Main Content ===== -->
+<main class="main-content">
+  <div class="chart-frame-wrap">
+    <iframe id="chartIframe" src="01_宏观经济周期仪表盘.html"></iframe>
+  </div>
+  <div class="note-bar" id="noteBar">
+    <span class="note-icon">&#128214;</span>
+    <div>
+      <div class="note-chart-title" id="noteChartTitle">图1  宏观经济周期仪表盘</div>
+      <div class="note-text" id="noteText">""" + ANALYSIS_NOTES[1] + """</div>
     </div>
   </div>
-  <iframe class="main-iframe" id="mainIframe"
-          src="01_宏观经济周期仪表盘.html"></iframe>
+</main>
+
+<!-- ===== Bottom Nav ===== -->
+<nav class="bottom-nav">
+  <button class="nav-btn" id="prevBtn" onclick="goTo(current - 1)">&#8592; 上一张</button>
+  <div class="dots-nav" id="dotsNav"></div>
+  <button class="nav-btn" id="nextBtn" onclick="goTo(current + 1)">下一张 &#8594;</button>
+</nav>
+
+<!-- ===== Keyboard Hint ===== -->
+<div class="kbd-hint"><kbd>&#8593;</kbd><kbd>&#8595;</kbd> 切换 &middot; <kbd>1</kbd>–<kbd>9</kbd> 跳转</div>
+
+<!-- ===== Search Overlay ===== -->
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this) toggleSearch()">
+  <div class="search-panel" onclick="event.stopPropagation()">
+    <input type="text" id="searchInput" placeholder="输入图表名称或图层过滤..." autofocus oninput="filterSearch()">
+    <div class="search-results" id="searchResults"></div>
+  </div>
 </div>
 
 <script>
-  const TOTAL = """ + str(len(CHARTS)) + """;
-  let current = 1;
+// ============================================================
+// Chart Data
+// ============================================================
+const CHART_DATA = [
+"""
 
-  function selectChart(n) {
-    current = n;
-    const item = document.querySelector(`.chart-item[data-index="${n}"]`);
-    if (!item) return;
-    document.getElementById('mainTitle').textContent = item.dataset.title;
-    document.getElementById('mainIframe').src = item.dataset.file;
-    document.querySelectorAll('.chart-item').forEach(el => el.classList.remove('active'));
-    item.classList.add('active');
-    item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }
+# 构建图表数据 JSON
+items_js = []
+for i, (fname, title, layer) in enumerate(CHARTS, 1):
+    note = ANALYSIS_NOTES.get(i, "")
+    dot_color = LAYER_COLORS.get(layer, "#787b86")
+    items_js.append(f"""  {{ "idx": {i}, "file": "{fname}", "title": "{title}", "layer": "{layer}", "note": "{note}", "color": "{dot_color}" }}""")
 
-  function nextChart() { if (current < TOTAL) selectChart(current + 1); }
-  function prevChart() { if (current > 1) selectChart(current - 1); }
+html += ",\n".join(items_js)
+html += """
+];
 
-  function filterCharts() {
-    const q = document.getElementById('search').value.toLowerCase();
-    document.querySelectorAll('.chart-item').forEach(el => {
-      const match = !q || el.dataset.title.toLowerCase().includes(q)
-                        || el.dataset.layer.toLowerCase().includes(q);
-      el.style.display = match ? '' : 'none';
-    });
-    document.querySelectorAll('.layer-group').forEach(g => {
-      const visible = g.querySelectorAll('.chart-item[style*="display: none"]').length
-                    < g.querySelectorAll('.chart-item').length;
-      g.style.display = visible ? '' : 'none';
-    });
-  }
+const TOTAL = CHART_DATA.length;
+let current = 1;
+let visited = new Set([1]);
 
-  // 键盘导航
-  document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); nextChart(); }
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); prevChart(); }
-    const num = parseInt(e.key);
-    if (num >= 1 && num <= 9) { e.preventDefault(); selectChart(num); }
+// ============================================================
+// Init
+// ============================================================
+function init() {
+  renderDots();
+  renderDotsNav();
+  renderSearchResults();
+  updateView();
+}
+init();
+
+// ============================================================
+// Navigation
+// ============================================================
+function goTo(n) {
+  if (n < 1 || n > TOTAL || n === current) return;
+  current = n;
+  visited.add(n);
+
+  const item = CHART_DATA[n - 1];
+  const iframe = document.getElementById('chartIframe');
+
+  // Force re-trigger CSS animation
+  iframe.style.animation = 'none';
+  void iframe.offsetHeight;
+  iframe.style.animation = '';
+
+  iframe.src = item.file;
+
+  updateView();
+}
+
+function updateView() {
+  const item = CHART_DATA[current - 1];
+
+  document.getElementById('noteChartTitle').textContent = item.title;
+  document.getElementById('noteText').textContent = item.note;
+  document.getElementById('progressLabel').textContent = current + ' / ' + TOTAL;
+
+  document.getElementById('prevBtn').disabled = current === 1;
+  document.getElementById('nextBtn').disabled = current === TOTAL;
+
+  // Update progress dots
+  document.querySelectorAll('.progress-dot, .dot-nav').forEach((el, i) => {
+    el.classList.toggle('active', i + 1 === current);
+    el.classList.toggle('visited', visited.has(i + 1));
   });
 
-  // 初始选中
-  document.querySelector('.chart-item[data-index="1"]').classList.add('active');
+  document.querySelectorAll('.search-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx) === current);
+  });
+}
+
+// ============================================================
+// Progress Dots (top bar)
+// ============================================================
+function renderDots() {
+  const container = document.getElementById('progressDots');
+  container.innerHTML = CHART_DATA.map((_, i) =>
+    `<button class="progress-dot" onclick="goTo(${i + 1})" title="跳转到${CHART_DATA[i].title}"></button>`
+  ).join('');
+}
+
+// ============================================================
+// Bottom Nav Dots
+// ============================================================
+function renderDotsNav() {
+  const container = document.getElementById('dotsNav');
+  container.innerHTML = CHART_DATA.map((_, i) =>
+    `<button class="progress-dot dot-nav" onclick="goTo(${i + 1})" title="${CHART_DATA[i].title}"></button>`
+  ).join('');
+}
+
+// ============================================================
+// Keyboard Navigation
+// ============================================================
+document.addEventListener('keydown', e => {
+  // Ignore if typing in an input
+  if (e.target.tagName === 'INPUT') {
+    if (e.key === 'Escape' && document.getElementById('searchOverlay').classList.contains('open')) {
+      toggleSearch();
+    }
+    return;
+  }
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); goTo(current + 1); }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); goTo(current - 1); }
+
+  const num = parseInt(e.key);
+  if (num >= 1 && num <= 9) { e.preventDefault(); goTo(num); }
+
+  if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); toggleSearch(); }
+  if (e.key === '/') { e.preventDefault(); toggleSearch(); }
+});
+
+// ============================================================
+// Search
+// ============================================================
+function toggleSearch() {
+  const overlay = document.getElementById('searchOverlay');
+  const open = !overlay.classList.contains('open');
+  overlay.classList.toggle('open', open);
+  if (open) {
+    setTimeout(() => document.getElementById('searchInput').focus(), 100);
+    filterSearch();
+  }
+}
+
+function filterSearch() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const results = document.getElementById('searchResults');
+
+  const filtered = q
+    ? CHART_DATA.filter(d => d.title.toLowerCase().includes(q) || d.layer.toLowerCase().includes(q))
+    : CHART_DATA;
+
+  results.innerHTML = filtered.map(d => `
+    <div class="search-item ${d.idx === current ? 'active' : ''}" data-idx="${d.idx}" onclick="goTo(${d.idx}); toggleSearch();">
+      <span class="s-dot" style="background:${d.color}"></span>
+      <span class="s-num">${String(d.idx).padStart(2, '0')}</span>
+      <span>${d.title}</span>
+      <span class="s-layer">${d.layer}</span>
+    </div>
+  `).join('');
+}
+
+// Close search on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('searchOverlay').classList.contains('open')) {
+    toggleSearch();
+  }
+});
 </script>
 
 </body>
@@ -294,4 +672,5 @@ with open(OUTPUT, 'w', encoding='utf-8') as f:
 print(f"仪表盘已生成: {os.path.abspath(OUTPUT)}")
 print(f"  嵌入图表: {len(CHARTS)} 张")
 print(f"  文件大小: {os.path.getsize(OUTPUT) / 1024:.1f} KB")
+print(f"  当前周期: {CYCLE_PHASE} ({CONFIDENCE})")
 print(f"\n用浏览器打开 index.html 即可查看")
