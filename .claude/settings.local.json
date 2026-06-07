@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git ls-remote *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git symbolic-ref *)",
+      "Bash(git update-ref *)",
+      "Bash(git reset *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python build_dashboard.py)",
+      "Bash(python -c \"from visualizations import run_all; data = __import__\\('visualizations.common', fromlist=['load_all']\\).load_all\\(\\); __import__\\('visualizations.chart1_macro_dashboard', fromlist=['generate']\\).generate\\(data\\)\")",
+      "Bash(python -c \"from visualizations.common import load_all; from visualizations.chart1_macro_dashboard import generate; generate\\(load_all\\(\\)\\)\")",
+      "Bash(python -c \"from visualizations.common import load_all; from visualizations.chart2_style_rotation import generate; generate\\(load_all\\(\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from visualizations.common import load_all; from visualizations.chart3_calendar_heatmap import generate; generate\\(load_all\\(\\)\\)\")",
+      "Bash(python *)"
+    ]
+  }
+}
